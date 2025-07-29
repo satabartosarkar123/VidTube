@@ -20,8 +20,10 @@ app.use(cookieParser()); // this will parse the cookies attached to the client r
 
 //bring routes
 import healthCheckRoutes from './routes/healthCheck.routes.js';
-
+import userRoutes from './routes/user.routes.js';
 //routes
+import { errorHandler } from './middlewares/error.middlewares.js'; // error handler middleware
 app.use('/api/v1/healthcheck', healthCheckRoutes);
-
+app.use('/api/v1/users', userRoutes);
+app.use(errorHandler); // error handler middleware should be the last middleware
 export {app};

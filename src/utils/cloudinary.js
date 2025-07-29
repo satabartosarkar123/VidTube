@@ -1,5 +1,8 @@
 import { v2 as cloudinary } from 'cloudinary';
 import fs from 'fs';
+import dotenv from "dotenv";
+
+dotenv.config()
 
 // Configuration
     cloudinary.config({ 
@@ -24,9 +27,12 @@ const uploadOnCloudinary = async (filePath) => {
             public_id: result.public_id
         };
     }
-    catch(error){//unlink the localFilePath
-        fs.unlinkSync(filePath); // delete the file from local storage
-        return null; // rethrow the error to be handled by the caller
+    catch(error){
+        console.log(error);
+        if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+        }
+        return null;
     }
 }
 

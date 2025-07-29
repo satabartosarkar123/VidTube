@@ -63,33 +63,34 @@ const userSchema=new Schema({
 
 import bcrypt from 'bcryptjs';
 //use hooks to do some middleware 
-userSchema.pre('save',async function(next){
-    //next is always given as it passes the context to the next middleware
-    if(!this.modified("password")) return next() //if password is not modified then we don't need to hash it again
-    this.password=bcrypt.hash(this.password,10)//this means userSchema Object
-    next()
-})
+userSchema.pre('save', async function(next) {
+    if (!this.isModified("password")) return next();
+    this.password = await bcrypt.hash(this.password, 10);
+    next();
+});
+
 userSchema.methods.isPasswordCorrect=async function (password){
     return await bcrypt.compare(password,this.password);//no need to tell how many rounds...it knows 
 }
 
 
-import jwt from jsonwebtoken
-userShema.methods.generateAuthToken=function(){
-    jwt.sign({
-        _id:this._id,
-        email:this.email,
-        username:this.username,
-        fullname:this.fullname,
-    },process.env.ACCESS_TOKEN_SECRET,{expiresIn:ACCESS_TOKEN_TIME})
+import jwt from 'jsonwebtoken';
+userSchema.methods.generateAuthToken = function() {
+    return jwt.sign({
+        _id: this._id,
+        email: this.email,
+        username: this.username,
+        fullname: this.fullname,
+    }, process.env.ACCESS_TOKEN_SECRET, { expiresIn: process.env.ACCESS_TOKEN_TIME });
 }
-userShema.methods.generateRefreshToken=function(){
-    jwt.sign({
-        _id:this._id,
-        email:this.email,
-        username:this.username,
-        fullname:this.fullname,
-    },process.env.REFRESH_TOKEN_SECRET,{expiresIn:REFRESH_TOKEN_TIME})
+
+userSchema.methods.generateRefreshToken = function() {
+    return jwt.sign({
+        _id: this._id,
+        email: this.email,
+        username: this.username,
+        fullname: this.fullname,
+    }, process.env.REFRESH_TOKEN_SECRET, { expiresIn: process.env.REFRESH_TOKEN_TIME });
 }
 
 
