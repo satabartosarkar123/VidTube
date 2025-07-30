@@ -127,4 +127,50 @@ const loginUser=asyncHandler(async(req,res)=>{
     
 })
 
-export { registerUser };
+import jwt from 'jsonwebtoken';
+
+const logoutUser=asyncHandler(async (req, res) => {
+    await UserfindByIdAndUpdate(
+        //To do --> will do after middlwware
+    );
+})
+
+const refreshAccessToken=asyncHandler(async (req, res) => {
+    const incomingRefreshToken=req.cookies.refreshToken;
+    if(!incomingRefreshToken){
+        throw new ApiError(401, "Refresh token is required");
+    }
+
+    try{
+        const decodedToken=jwt.verify(
+            incomingRefreshToken,
+            process.env.REFRESH_TOKEN_SECRET
+        )
+        const user=await User.findById(decodedToken?._id) // the ? is to handle the case if it is not found
+        if(!user){
+            throw new ApiError(401,"Invalid Refresh Token")
+        }
+        //now task is to validate this refresh token matches the refreshtoen copy saved in database or not
+
+        if(incomingRefreshToken!==user?.refreshToken){
+            throw new ApiError(401,"Invalid Refresh Token")
+        }
+        //generate new access token
+        const opion={
+            httpOnly:true,
+            secure: process.env.NODE_ENV === 'production', // Set secure flag in production
+        }
+        const{accessToken, refreshToken:newRefreshToken}=await generateAccesAndRefreshToken(user._id)
+        return res
+        .status(200)
+        .cookie("accessToken", accessToken, opion)
+        .cookie("refreshToken", newRefreshToken, opion)
+        .json(new apiResponse(200, {accessToken, newRefreshToken}, "Refresh token generated successfully"))
+    }   
+    catch(error) {
+        throw new ApiError(401, "some issue in generating refresh token");
+    }
+
+})
+
+export { registerUser,loginUser,refreshAccessToken };
