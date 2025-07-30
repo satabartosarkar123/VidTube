@@ -5,6 +5,23 @@ import { uploadOnCloudinary } from '../utils/cloudinary.js';
 import { apiResponse } from '../utils/apiResponse.js';
 import fs from 'fs';
 
+const generateAccesAndRefreshToken=async (userId)=>{
+    try{
+    const user=await User.findById(userId);
+    if(!user){
+        throw new ApiError(404, "User not found");
+    }
+    const accessToken=user.generateAuthToken();
+    const refreshToken=user.generateRefreshToken();
+    user.refreshToken = refreshToken; // Save the refresh token in the user document
+    await user.save(); // Save the user document with the new refresh token
+    return { accessToken, refreshToken };
+    }
+    catch(error){ //just incase error in above code
+        throw new ApiError(505," Error generating access and refresh tokens", error.message);
+    }
+}
+
 const registerUser = asyncHandler(async (req, res) => {
     const {fullname,email,username,password}=req.body;
     if(
@@ -74,6 +91,40 @@ const registerUser = asyncHandler(async (req, res) => {
 
     return res.status(201)
         .json(new apiResponse(201, createduser, "User registered successfully"));
+})
+
+const loginUser=asyncHandler(async(req,res)=>{
+    //get data from body
+    const{email,username,password}=req.body;
+    if(!email){throw new ApiError(400,"email is required")}
+
+    const existingUser=await User.findOne({$or:[{email},{username}]});// find user based on name or email
+
+    if(!user){
+        throw new ApiError(404,"User not found with this email or username");
+    }
+
+    //validate password
+    const isPasswordValid=await existingUser.isPasswordCorrect(password);
+    if(!isPasswordValid){
+        throw new ApiError(400,"Invalid password");
+    }
+    //generate access and refresh token
+    const { accessToken, refreshToken } = await generateAccesAndRefreshToken(existingUser._id); //create a function to generate tokens
+    const loggedInUser=await User.findById(existingUser._id).select("-password");
+    if (!loggedInUser) {
+        throw new ApiError(500, "Login failed");
+    }
+    const options={
+        httpOnly:true,//user can't modify anymore
+        secure: process.env.NODE_ENV === 'production', // Set secure flag in production
+    }
+    return res
+        .status(200)
+        .cookie("accessToken",accessToken, options)
+        .cookie("refreshToken",refreshToken, options)
+        .json(new apiResponse(200,loggedInUser,accessToken,refreshToken,"Userrr login successful"))
+    
 })
 
 export { registerUser };
