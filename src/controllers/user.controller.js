@@ -185,17 +185,20 @@ const refreshAccessToken=asyncHandler(async (req, res) => {
 })
 
 const changeCurrentPassword=asyncHandler(async (req,res)=>{
-    //grab old and new pass
-    const{oldPassword,newPassword}=req.body; //get the passwords from the request...
-    const user=await User.findById(req.user?._id);//get hold of user
+    const{oldPassword,newPassword}=req.body;
+    const user=await User.findById(req.user?._id);
 
-    const isPasswordValid=await user.isPasswordCorrect(oldPassword); //check old password is even valid or not
-    if(!isPasswordValid){
-        throw new ApiError(401,"wrong password(old) entered.")
+    if (!user) {
+        throw new ApiError(404, "User not found");
     }
-    user.password=newPassword;//else update the password
-    await user.save({validateBeforeSave:false})
 
+    const isPasswordValid=await user.isPasswordCorrect(oldPassword);
+    if(!isPasswordValid){
+        throw new ApiError(401,"Wrong password (old) entered.")
+    }
+    user.password=newPassword;
+    await user.save({validateBeforeSave:false});
+    return res.status(200).json(new apiResponse(200, null, "Password changed successfully"));
 })
 
 const getCurrentUser=asyncHandler(async (req,res)=>{
@@ -214,12 +217,12 @@ const updateAccountDetails=asyncHandler(async (req,res)=>{
         {
             $set:{
                 fullname,
-                eail:email.toLowerCase()
+                email:email.toLowerCase()
             }
         },{new:true}
     ).select("-password -refreshToken") //just updated user is grabbed
 
-    return res.status(200).json(new apiResponse(200,user,"Account etails updated "))
+    return res.status(200).json(new apiResponse(200,user,"Account details updated "))
 
 })
 
@@ -233,7 +236,7 @@ const updateUserAvatar=asyncHandler(async (req,res)=>{
         throw new ApiError(500 , "something went wrong in upload")
     }
 
-    await Use.findByIdAndUpdate(
+    await User.findByIdAndUpdate(
         req.user?._id,{
             $set:{avatar:avatar.url}
         },{new:true}
@@ -252,7 +255,7 @@ const updateUserCoverImage=asyncHandler(async (req,res)=>{
         throw new ApiError(500 , "something went wrong in upload")
     }
 
-    await Use.findByIdAndUpdate(
+    await User.findByIdAndUpdate(
         req.user?._id,{
             $set:{coverImage:coverImage.url}
         },{new:true}
@@ -261,5 +264,120 @@ const updateUserCoverImage=asyncHandler(async (req,res)=>{
     return res.status(200).json(new apiResponse(200,coverImage,"Cover Image updated"))
 })
 
+const getUserChannelProfile=asyncHandler(async (req,res)=>{
+    const {username}=req.params//params gives the route parameters
+    if(!username?.trim()){
+        throw new ApiError(400,"Username is required");
+    }
+    //we grab channel info through aggregation pipeline
+    const channel=await User.aggregate (
+        [
+            {
+                $match:{
+                    username:username?.toLowerCase(),
+                }
+            },{
+                $lookup:{
+                    from: "subscriptions",//I wanna look up from the subscription table/model
+                    localField:"_id",
+                    foreignField:"channel",
+                    as:"subscribers" // call them subscriber
+                }//look up the subscribers of the channel, in DBMS terms this is a left outer join
 
-export { registerUser,loginUser,refreshAccessToken,logoutUser,changeCurrentPassword,getCurrentUser,updateAccountDetails,updateUserAvatar,updateUserCoverImage};
+            },{
+                    $lookup:{
+                    from: "subscriptions",//I wanna look up from the subscription table/model
+                    localField:"_id",
+                    foreignField:"subscriber",
+                    as:"subscriberedTo" 
+                }//look up the  channels I have subscribed to , in DBMS terms this is a left outer join
+
+            },{
+                $addFields:{ 
+                    subscribersCount:{
+                        $size:"$subscribers"
+                    },
+                    channelsSubscribedToCount:{
+                        $size:"$subscriberedTo"
+                    },
+                    isSubscribed:{
+                        $cond:{
+                            if:{$in: [req.user?._id,"$subscribers,subscriber"]},
+                            then:true,
+                            else:false
+                        }
+                    }
+                }
+            },//this pipelinestage will add the subscribersCount and channelsSubscribedToCount fields
+            {
+                //project only necessary data 
+                $project:{
+                    subscribersCount:1,
+                    channelsSubscribedToCount:1,
+                    isSubscribed:1,
+                    _id:1,
+                    fullname:1,
+                    username:1,
+                    avatar:1,
+                    coverImage:1
+                }//this pipeline stage will project only the necessary data
+            }
+        ]
+    )
+
+    if(!channel?.length){
+        throw new ApiError(404,"Channel not found")
+    }
+
+    return res.status(200).json(new apiResponse(200,channel[0],"channel profile fetched successfully"))
+
+})
+
+const getWatchHistory=asyncHandler(async (req,res)=>{
+    const user=await User.aggregate([
+        {
+            $match:{
+                _id:new mongoose.Types.ObjectId(req.user?._id)
+            }
+        },
+        {
+            $lookup:{
+                from : "videos",
+                localField:"watchHistory",
+                foreignField:"_id",
+                as:"watchHistory",
+                pipeline:[
+                    {
+                        $lookup:{
+                            from:"users",
+                            localField:"user", // or "owner" if that's the correct field in your Video model
+                            foreignField:"_id",
+                            as:"owner"
+                        }
+                    },
+                    {
+                        $addFields:{
+                            owner:{
+                                $first:"$owner"
+                            }
+                        }
+                    },
+                    {
+                        $project:{
+                            title:1,
+                            description:1,
+                            thumbnail:1,
+                            owner: { fullname: 1, username: 1, avatar: 1 }
+                        }
+                    }
+                ]
+            }
+        }
+    ])
+    return res.status(200).json(new apiResponse(200,user[0]?.watchHistory,"watch history fetched successfully"))
+})
+
+
+
+
+export { registerUser,loginUser,refreshAccessToken,logoutUser,changeCurrentPassword,getCurrentUser,updateAccountDetails,updateUserAvatar,updateUserCoverImage,getUserChannelProfile,getWatchHistory};
