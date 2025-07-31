@@ -130,9 +130,20 @@ const loginUser=asyncHandler(async(req,res)=>{
 import jwt from 'jsonwebtoken';
 
 const logoutUser=asyncHandler(async (req, res) => {
-    await UserfindByIdAndUpdate(
-        //To do --> will do after middlwware
-    );
+    await User.findByIdAndUpdate(
+        req.user._id,
+        {$set:{refreshToken:undefined}},
+        {new: true}
+    ); // clear the refresh token in the database by setting it to undefined
+    const options = {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production', // Set secure flag in production
+    }
+    return res
+        .status(200) // send a 200 OK response
+        .cookie("accessToken", "", options) // clear the access token cookie
+        .cookie("refreshToken", "", options) // clear the refresh token cookie
+        .json(new apiResponse(200, null, "User logged out successfully"));
 })
 
 const refreshAccessToken=asyncHandler(async (req, res) => {
@@ -173,4 +184,4 @@ const refreshAccessToken=asyncHandler(async (req, res) => {
 
 })
 
-export { registerUser,loginUser,refreshAccessToken };
+export { registerUser,loginUser,refreshAccessToken,logoutUser};
