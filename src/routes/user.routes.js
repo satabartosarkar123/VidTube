@@ -12,7 +12,7 @@ router.route('/register').post(
   registerUser
 );
 
-
+ 
 //secured routes
 router.route('/logout').post(verifyJWT, logoutUser);// logout user, only accessible if the user is logged in
   // the next function in verifyJWT helps to first give the control to the verifyJWT middleware, which checks if the user is logged in, and then calls the logoutUser controller if the user is authenticated
